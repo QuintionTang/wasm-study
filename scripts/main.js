@@ -32,75 +32,88 @@ const wasmBrowserInstantiate = async (wasmModuleUrl, importObject) => {
 const runWasm = async () => {
     // Instantiate our wasm module
     const wasmModule = await wasmBrowserInstantiate("./build/core.wasm");
+    const { init, getNextPosition, move } = wasmModule.instance.exports;
 
-    // Get our exports object, with all of our exported Wasm Properties
-    const exports = wasmModule.instance.exports;
+    const CANVAS_LOCATION_X = 150;
+    const ROD_LOCATION_X = 200;
+    const ROD_LOCATION_Y = 135;
+    const BALL_LOCATION_Y = 150;
+    const PENDULUM_VELOCITY = 0;
+    const SPEED = 50;
+    const AMPLITUDE = 20;
 
-    // Get our memory object from the exports
-    const memory = exports.memory;
+    const canvas = document.getElementById("pendulum");
+    const context = canvas.getContext("2d");
+    const boundingRect = canvas.getBoundingClientRect();
 
-    // Create a Uint8Array to give us access to Wasm Memory
-    const wasmByteMemoryArray = new Uint8Array(memory.buffer);
+    // Compute the size of the viewport
+    const ratio = window.devicePixelRatio || 1;
+    const width = (boundingRect.width | 0) * ratio;
+    const height = (boundingRect.height | 0) * ratio;
+    canvas.width = width;
+    canvas.height = height;
+    context.scale(ratio, ratio);
 
-    // Get our canvas element from our index.html
-    const canvasElement = document.querySelector("canvas");
-
-    // Set up Context and ImageData on the canvas
-    const canvasContext = canvasElement.getContext("2d");
-    const canvasImageData = canvasContext.createImageData(
-        canvasElement.width,
-        canvasElement.height
-    );
-
-    // Clear the canvas
-    canvasContext.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-    const getDarkValue = () => {
-        return Math.floor(Math.random() * 100);
+    const clearCanvas = (context, canvas) => {
+        context.clearRect(0, 0, canvas.width, canvas.height);
     };
+    const drawBall = (context, x, y) => {
+        context.arc(x, y, 20, 0, 2 * Math.PI, false);
 
-    const getLightValue = () => {
-        return Math.floor(Math.random() * 127) + 127;
-    };
+        const startCircle = {
+            x,
+            y,
+            r: 2,
+        };
 
-    const drawCheckerBoard = () => {
-        const checkerBoardSize = 20;
+        const endCircle = {
+            x,
+            y,
+            r: 18,
+        };
 
-        // Generate a new checkboard in wasm
-        exports.generateCheckerBoard(
-            getDarkValue(),
-            getDarkValue(),
-            getDarkValue(),
-            getLightValue(),
-            getLightValue(),
-            getLightValue()
+        const circleGradient = context.createRadialGradient(
+            startCircle.x,
+            startCircle.y,
+            startCircle.r,
+            endCircle.x,
+            endCircle.y,
+            endCircle.r
         );
 
-        // Pull out the RGBA values from Wasm memory, the we wrote to in wasm,
-        // starting at the checkerboard pointer (memory array index)
-        const imageDataArray = wasmByteMemoryArray.slice(
-            exports.CHECKERBOARD_BUFFER_POINTER.valueOf(),
-            exports.CHECKERBOARD_BUFFER_SIZE.valueOf()
-        );
+        circleGradient.addColorStop(0, "#fff");
+        circleGradient.addColorStop(1, "#fa310a");
 
-        // Set the values to the canvas image data
-        canvasImageData.data.set(imageDataArray);
-
-        // Clear the canvas
-        canvasContext.clearRect(
-            0,
-            0,
-            canvasElement.width,
-            canvasElement.height
-        );
-
-        // Place the new generated checkerboard onto the canvas
-        canvasContext.putImageData(canvasImageData, 0, 0);
+        return circleGradient;
+    };
+    const drawRod = (context, x, y) => {
+        context.moveTo(CANVAS_LOCATION_X, 0);
+        context.lineTo(x, y);
+        context.lineWidth = 1;
+        context.setLineDash([1, 1]);
+        context.strokeStyle = "grey";
+        context.stroke();
     };
 
-    drawCheckerBoard();
-    setInterval(() => {
-        drawCheckerBoard();
-    }, 1000);
+    context.beginPath();
+    init(CANVAS_LOCATION_X, AMPLITUDE, width, height);
+    drawRod(context, ROD_LOCATION_X, ROD_LOCATION_Y);
+    context.beginPath();
+    const pendulumCircle = drawBall(context, ROD_LOCATION_X, BALL_LOCATION_Y);
+    context.fillStyle = pendulumCircle;
+    context.fill();
+    context.beginPath();
+
+    function drawPendulum() {
+        clearCanvas(context, canvas);
+        context.beginPath();
+        move();
+        drawRod(context, getNextPosition(), ROD_LOCATION_Y);
+        context.beginPath();
+        const grd = drawBall(context, getNextPosition(), BALL_LOCATION_Y);
+        context.fillStyle = grd;
+        context.fill();
+    }
+    window.setInterval(drawPendulum, SPEED);
 };
 runWasm();

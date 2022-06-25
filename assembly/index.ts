@@ -1,76 +1,40 @@
-// 设置内存，通过增加Wasm内存1页(64KB)
-memory.grow(1);
+let pendulum: Pendulum;
+let angle: i32;
 
-// 定义棋盘格的大小
-const CHECKERBOARD_SIZE: i32 = 20;
+class Pendulum {
+    nextPosition: f64;
+    initialPosition: f64;
+    amplitude: u32;
 
-// Create a buffer/pointer (array index and size) to where
-// in memory we are storing the pixels.
-// NOTE: Be sure to set a correct --memoryBase when
-// when writing to memory directly like we are here.
-// https://docs.assemblyscript.org/details/compiler
-export const CHECKERBOARD_BUFFER_POINTER: i32 = 0;
-export const CHECKERBOARD_BUFFER_SIZE: i32 =
-    CHECKERBOARD_SIZE * CHECKERBOARD_SIZE * 4;
-
-// Function to generate our checkerboard, pixel by pixel
-export function generateCheckerBoard(
-    darkValueRed: i32,
-    darkValueGreen: i32,
-    darkValueBlue: i32,
-    lightValueRed: i32,
-    lightValueGreen: i32,
-    lightValueBlue: i32
-): void {
-    // Since Linear memory is a 1 dimensional array, but we want a grid
-    // we will be doing 2d to 1d mapping
-    // https://softwareengineering.stackexchange.com/questions/212808/treating-a-1d-data-structure-as-2d-grid
-    for (let x: i32 = 0; x < CHECKERBOARD_SIZE; x++) {
-        for (let y: i32 = 0; y < CHECKERBOARD_SIZE; y++) {
-            // Set our default case to be dark squares
-            let isDarkSquare: boolean = true;
-
-            // We should change our default case if
-            // We are on an odd y
-            if (y % 2 === 0) {
-                isDarkSquare = false;
-            }
-
-            // Lastly, alternate on our x value
-            if (x % 2 === 0) {
-                isDarkSquare = !isDarkSquare;
-            }
-
-            // Now that we determined if we are dark or light,
-            // Let's set our square value
-            let squareValueRed = darkValueRed;
-            let squareValueGreen = darkValueGreen;
-            let squareValueBlue = darkValueBlue;
-            if (!isDarkSquare) {
-                squareValueRed = lightValueRed;
-                squareValueGreen = lightValueGreen;
-                squareValueBlue = lightValueBlue;
-            }
-
-            // Let's calculate our index, using our 2d -> 1d mapping.
-            // And then multiple by 4, for each pixel property (r,g,b,a).
-            let squareNumber = y * CHECKERBOARD_SIZE + x;
-            let squareRgbaIndex = squareNumber * 4;
-
-            // Finally store the values.
-            store<u8>(
-                CHECKERBOARD_BUFFER_POINTER + squareRgbaIndex + 0,
-                squareValueRed
-            ); // Red
-            store<u8>(
-                CHECKERBOARD_BUFFER_POINTER + squareRgbaIndex + 1,
-                squareValueGreen
-            ); // Green
-            store<u8>(
-                CHECKERBOARD_BUFFER_POINTER + squareRgbaIndex + 2,
-                squareValueBlue
-            ); // Blue
-            store<u8>(CHECKERBOARD_BUFFER_POINTER + squareRgbaIndex + 3, 255); // Alpha (Always opaque)
-        }
+    constructor(initialPosition: f64, amplitude: u32) {
+        this.initialPosition = initialPosition;
+        this.amplitude = amplitude;
     }
+}
+
+export function init(
+    startPositionX: f64,
+    amplitude: u32,
+    w: u32,
+    h: u32
+): void {
+    angle = 0;
+    var needed = (<i32>((w * h * sizeof<i32>() + 0xffff) & ~0xffff)) >>> 16;
+    var actual = memory.size();
+    if (needed > actual) memory.grow(needed - actual);
+    pendulum = new Pendulum(startPositionX, amplitude);
+}
+
+export function move(): void {
+    angle += 10;
+    if (angle == 360 || angle > 360) {
+        angle = 0;
+    }
+    pendulum.nextPosition =
+        pendulum.initialPosition +
+        pendulum.amplitude * Math.sin((angle * Math.PI) / 180);
+}
+
+export function getNextPosition(): f64 {
+    return pendulum.nextPosition;
 }
